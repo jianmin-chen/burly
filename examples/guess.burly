@@ -1,0 +1,31 @@
+use math from "std/math";
+use { random } from "std/random";
+use { input, output } from "std/io";
+
+var game = fn(max: number=100, strikes: number=10) {
+  var correct = random(0, max, fn (num) {
+    return math.round(num);
+  });
+  var strike = 1;
+  var guess = num(input("I'm thinking of a number between 0 and {}. What's your guess? ", max));
+  while (guess != correct) {
+    if (guess < correct) {
+      strike = strike + 1;
+      output("My number is bigger than that. You have {} tries left.", strikes - strike);
+    } else if (guess > correct) {
+      strike = strike + 1;
+      output("My number is smaller than that. You have {} tries left.", strikes - strike);
+    } else {
+      output("That's correct! You win.");
+      break;
+    }
+
+    strike = strike + 1;
+    if (strike == strikes) {
+      output("You ran out of tries! The correct number was {}.", correct);
+      break;
+    }
+
+    guess = num(input("I'm thinking of a number between 0 and {}. What's your guess? ", max));
+  }  
+}

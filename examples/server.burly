@@ -1,0 +1,32 @@
+use { http } from "std/http";
+use { env } from "std/env";
+use { log } from "std/io";
+use { Date } from "std/date";
+
+var opts = env.load(".env");
+var port = num(opts.get("PORT") || 3000);
+
+var router = new http.Router();
+
+class CustomLogger {
+  static fn log(...msg: string[]) {
+    for i : range(0, msg.length()) {
+      output("[{}] {}", Date.now(), msg[i]);
+    }
+
+    -- or, an alternative
+    for i : msg {
+      output("[{}] {}", Date.now(), i);
+    }
+  }
+}
+
+router.get("/", fn (...props) {
+  CustomLogger.log("GET request made to /");
+  var res = props.response;
+  res.send("Hello, World! Bye, Burly!");
+});
+
+router.listen(port, fn () {
+  log("Listening on port ", str(num));
+});
