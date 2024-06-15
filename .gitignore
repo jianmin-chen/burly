@@ -1,3 +1,5 @@
 /*.burly
 burly
 test
+test.c
+*.json
