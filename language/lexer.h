@@ -26,8 +26,6 @@ typedef enum TokenType
   RIGHT_PAREN,
   LEFT_BRACK,
   RIGHT_BRACK,
-  SINGLE_QUOTE,
-  DOUBLE_QUOTE,
   SEMICOLON,
   COLON,
   COMMA,
@@ -47,6 +45,7 @@ typedef enum TokenType
   STAR,
   SLASH,
   BACKSLASH,
+  END_OF_FILE
 } TokenType;
 
 char *tokenTypeToString(TokenType type);
@@ -55,6 +54,8 @@ typedef struct Token
 {
   TokenType type;
   char *value;
+  int row;
+  int col;
 } Token;
 
 typedef struct Lexer
@@ -75,8 +76,8 @@ void addToken(Lexer *lexer, TokenType type, char *value);
 void scanTokens(Lexer *lexer);
 void scanToken(Lexer *lexer);
 
-char peek(Lexer *lexer);
-char advance(Lexer *lexer);
-bool eat(Lexer *lexer, char chr);
+char lexerPeek(Lexer *lexer);
+char lexerAdvance(Lexer *lexer);
+bool lexerEat(Lexer *lexer, char chr);
 
 #endif

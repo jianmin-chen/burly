@@ -51,10 +51,6 @@ char *tokenTypeToString(TokenType type)
     return "LEFT_BRACE";
   case RIGHT_BRACK:
     return "RIGHT_BRACK";
-  case SINGLE_QUOTE:
-    return "SINGLE_QUOTE";
-  case DOUBLE_QUOTE:
-    return "DOUBLE_QUOTE";
   case SEMICOLON:
     return "SEMICOLON";
   case COLON:
@@ -101,7 +97,7 @@ void initLexer(Lexer *lexer, char *program)
   lexer->program = program;
   lexer->current = 0;
   lexer->max = strlen(program);
-  lexer->row = 0;
+  lexer->row = 1;
   lexer->col = 0;
   lexer->tokens = NULL;
   lexer->tokenCapacity = 0;
@@ -111,9 +107,31 @@ void initLexer(Lexer *lexer, char *program)
 void lexerPanic(Lexer *lexer, char *error)
 {
   // Format:
-  // 2:8 | printf("Hello, world!);
-  //            ^ Unexpected end of file
-  fprintf(stderr, "%i | ", lexer->row);
+  // 2:8 | output("Hello, world!);
+  //              ^ Unexpected end of file
+  char *padded = malloc(sizeof(char) * (strlen(error) + 3));
+  strcat(padded, "^ ");
+  strcat(padded, error);
+
+  int nl = lexer->row;
+  lexer->current = 0;
+  lexer->row = 1;
+  while (lexer->row < nl)
+  {
+    if (lexerAdvance(lexer) == '\n')
+      lexer->row++;
+  }
+
+  // Now grab the code on that line
+  char *s = malloc(sizeof(char));
+  while (lexerPeek(lexer) != '\n' && lexerPeek(lexer) != '\0')
+  {
+    int size = strlen(s);
+    realloc(s, sizeof(char) * (size + 2));
+    s[size] = lexerAdvance(lexer);
+  }
+
+  fprintf(stderr, "%i:%i | %s\n%*s\n", lexer->row, lexer->col, s, strlen(padded) + lexer->col + 5, padded);
   exit(-1);
 }
 
@@ -129,28 +147,30 @@ void addToken(Lexer *lexer, TokenType type, char *value)
   Token token;
   token.type = type;
   token.value = value;
+  token.row = lexer->row;
+  token.col = lexer->col;
   lexer->tokens[lexer->tokenCount++] = token;
 }
 
-char peek(Lexer *lexer)
+char lexerPeek(Lexer *lexer)
 {
   if (lexer->current >= lexer->max)
     return '\0';
   return lexer->program[lexer->current];
 }
 
-char advance(Lexer *lexer)
+char lexerAdvance(Lexer *lexer)
 {
   if (lexer->current >= lexer->max)
     return '\0';
   return lexer->program[lexer->current++];
 }
 
-bool eat(Lexer *lexer, char chr)
+bool lexerEat(Lexer *lexer, char chr)
 {
-  if (peek(lexer) == chr)
+  if (lexerPeek(lexer) == chr)
   {
-    advance(lexer);
+    lexerAdvance(lexer);
     return true;
   }
   return false;
@@ -158,7 +178,7 @@ bool eat(Lexer *lexer, char chr)
 
 void scanToken(Lexer *lexer)
 {
-  char chr = advance(lexer);
+  char chr = lexerAdvance(lexer);
   lexer->col++;
   switch (chr)
   {
@@ -175,32 +195,19 @@ void scanToken(Lexer *lexer)
   case ']':
     return addToken(lexer, RIGHT_BRACK, "]");
   case '\'':
-  {
-    char *s = malloc(sizeof(char));
-    while (peek(lexer) != '\'')
-    {
-      if (peek(lexer) == '\0')
-        lexerPanic(lexer, "Unexpected end of file");
-      int size = strlen(s);
-      realloc(s, sizeof(char) * (size + 2));
-      s[size] = advance(lexer);
-    }
-    advance(lexer);
-    return addToken(lexer, SINGLE_QUOTE, s);
-  }
   case '"':
   {
     char *s = malloc(sizeof(char));
-    while (peek(lexer) != '"')
+    while (lexerPeek(lexer) != chr)
     {
-      if (peek(lexer) == '\0')
+      if (lexerPeek(lexer) == '\0')
         lexerPanic(lexer, "Unexpected end of file");
       int size = strlen(s);
       realloc(s, sizeof(char) * (size + 2));
-      s[size] = advance(lexer);
+      s[size] = lexerAdvance(lexer);
     }
-    advance(lexer);
-    return addToken(lexer, DOUBLE_QUOTE, s);
+    lexerAdvance(lexer);
+    return addToken(lexer, STRING, s);
   }
   case ';':
     return addToken(lexer, SEMICOLON, ";");
@@ -211,33 +218,33 @@ void scanToken(Lexer *lexer)
   case '.':
     return addToken(lexer, PERIOD, ".");
   case '=':
-    if (eat(lexer, '='))
+    if (lexerEat(lexer, '='))
       return addToken(lexer, EQUIV, "==");
     return addToken(lexer, EQUAL, "=");
   case '!':
-    if (eat(lexer, '='))
+    if (lexerEat(lexer, '='))
       return addToken(lexer, NOT_EQUIV, "!=");
     return addToken(lexer, NOT, "!");
   case '&':
-    if (eat(lexer, '&'))
+    if (lexerEat(lexer, '&'))
       return addToken(lexer, AND, "&&");
   case '|':
-    if (eat(lexer, '|'))
+    if (lexerEat(lexer, '|'))
       return addToken(lexer, OR, "||");
   case '<':
-    if (eat(lexer, '='))
+    if (lexerEat(lexer, '='))
       return addToken(lexer, LTE, "<=");
     return addToken(lexer, LT, "<");
   case '>':
-    if (eat(lexer, '='))
+    if (lexerEat(lexer, '='))
       return addToken(lexer, GTE, ">=");
     return addToken(lexer, GT, ">");
   case '+':
     return addToken(lexer, PLUS, "+");
   case '-':
-    if (eat(lexer, '='))
+    if (lexerEat(lexer, '='))
     {
-      while (advance(lexer) != '\n' || peek(lexer) != '\0')
+      while (lexerAdvance(lexer) != '\n' || lexerPeek(lexer) != '\0')
         ;
       return;
     }
@@ -250,6 +257,7 @@ void scanToken(Lexer *lexer)
     return addToken(lexer, BACKSLASH, "\\");
   case '\n':
     lexer->row++;
+    lexer->col = 0;
   case '\t':
   case '\r':
   case ' ':
@@ -260,27 +268,29 @@ void scanToken(Lexer *lexer)
       char *s = malloc(sizeof(char) * 2);
       *s = chr;
       bool period = false;
-      while (isdigit(peek(lexer)) || (!period && peek(lexer) == '.'))
+      while (isdigit(lexerPeek(lexer)) || (!period && lexerPeek(lexer) == '.'))
       {
-        char next = advance(lexer);
+        char next = lexerAdvance(lexer);
         int size = strlen(s);
         realloc(s, sizeof(char) * (size + 2));
         s[size] = next;
         if (next == '.')
           period = true;
       }
+      lexer->col += strlen(s);
       return addToken(lexer, NUMBER, s);
     }
     else if (isalpha(chr))
     {
       char *s = malloc(sizeof(char) * 2);
       *s = chr;
-      while (isalpha(peek(lexer)) || isdigit(peek(lexer)))
+      while (isalpha(lexerPeek(lexer)) || isdigit(lexerPeek(lexer)))
       {
         int size = strlen(s);
         realloc(s, sizeof(char) * (size + 2));
-        s[size] = advance(lexer);
+        s[size] = lexerAdvance(lexer);
       }
+      lexer->col += strlen(s) - 1;
       if (strcmp(s, "use") == 0)
         return addToken(lexer, KEYWORD_USE, s);
       else if (strcmp(s, "from") == 0)
@@ -313,8 +323,10 @@ void scanToken(Lexer *lexer)
 
 void scanTokens(Lexer *lexer)
 {
-  while (peek(lexer) != '\0')
+  while (lexerPeek(lexer) != '\0')
   {
     scanToken(lexer);
   }
+  lexer->col++;
+  addToken(lexer, END_OF_FILE, "EOF");
 }
