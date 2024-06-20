@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-static char *readFile(const char *path, char *mode)
+char *readFile(const char *path, char *mode)
 {
   FILE *file = fopen(path, mode);
   if (file == NULL)
@@ -20,4 +20,16 @@ static char *readFile(const char *path, char *mode)
     fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
     exit(74);
   }
+  size_t bytesRead = fread(buffer, sizeof(char), fileSize, file);
+  buffer[bytesRead] = '\0';
+  if (bytesRead < fileSize)
+  {
+    fprintf(stderr, "Could not read file \"%s\".\n", path);
+    exit(74);
+  }
+
+  fclose(file);
+  return buffer;
 }
+
+char *writeFile() {}

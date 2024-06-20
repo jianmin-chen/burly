@@ -89,6 +89,8 @@ char *tokenTypeToString(TokenType type)
     return "SLASH";
   case BACKSLASH:
     return "BACKSLASH";
+  case END_OF_FILE:
+    return "END_OF_FILE";
   }
 }
 
@@ -110,6 +112,12 @@ void lexerPanic(Lexer *lexer, char *error)
   // 2:8 | output("Hello, world!);
   //              ^ Unexpected end of file
   char *padded = malloc(sizeof(char) * (strlen(error) + 3));
+  char *s = malloc(sizeof(char));
+  if (padded == NULL || s == NULL)
+  {
+    printf("%i:%i | %s", lexer->row, lexer->col, error);
+    exit(-1);
+  }
   strcat(padded, "^ ");
   strcat(padded, error);
 
@@ -123,7 +131,6 @@ void lexerPanic(Lexer *lexer, char *error)
   }
 
   // Now grab the code on that line
-  char *s = malloc(sizeof(char));
   while (lexerPeek(lexer) != '\n' && lexerPeek(lexer) != '\0')
   {
     int size = strlen(s);
@@ -198,6 +205,8 @@ void scanToken(Lexer *lexer)
   case '"':
   {
     char *s = malloc(sizeof(char));
+    if (s == NULL)
+      lexerPanic(lexer, "Ran out of memory");
     while (lexerPeek(lexer) != chr)
     {
       if (lexerPeek(lexer) == '\0')

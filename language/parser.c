@@ -1,7 +1,53 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include "parser.h"
 #include "../utils/memory.h"
-#include <stdio.h>
+#include "../utils/string.h"
+
+char *primitiveToString(Primitive *primitive)
+{
+  switch (primitive->type)
+  {
+  case PRIMITIVE_FLOAT:
+    return format("%f", primitive->f);
+  case PRIMITIVE_STRING:
+    return primitive->s;
+  }
+}
+
+char *nodeToString(Node *node)
+{
+  switch (node->type)
+  {
+  case PRIMITIVE:
+  {
+    char *s = format("{ \"type\": \"PRIMITIVE\", \"value\": \"%s\" }", primitiveToString(node->primitive));
+    return s;
+  }
+  case UNARY_OP:
+  {
+    char *s = "{ \"type\": \"UNARY_OP\"";
+    return s;
+  }
+  case BIN_OP:
+  {
+    char *s = "{ \"type\": \"BIN_OP\"";
+    return s;
+  }
+  case VAR:
+  {
+    char *s = "{ \"type\": \"VAR\"";
+    return s;
+  }
+  case CALL:
+  {
+    char *s = "{ \"type\": \"CALL\", ";
+    return s;
+  }
+  default:
+    return "undefined";
+  }
+}
 
 void initParser(Parser *parser, Lexer *lexer)
 {
@@ -15,6 +61,7 @@ void initParser(Parser *parser, Lexer *lexer)
 
 void parserPanic(Parser *parser, char *error)
 {
+  // Format:
   fprintf(stderr, "%s", error);
   exit(-2);
 }
@@ -38,23 +85,23 @@ Node *newNode(NodeType type)
   return node;
 }
 
-Token parserPeek(Parser *parser)
+Token *parserPeek(Parser *parser)
 {
   if (parser->current >= parser->tokenCount)
-    return parser->tokens[parser->tokenCount - 1];
-  return parser->tokens[parser->current];
+    return &parser->tokens[parser->tokenCount - 1];
+  return &parser->tokens[parser->current];
 }
 
-Token parserAdvance(Parser *parser)
+Token *parserAdvance(Parser *parser)
 {
   if (parser->current >= parser->tokenCount)
-    return parser->tokens[parser->tokenCount - 1];
-  return parser->tokens[parser->current++];
+    return &parser->tokens[parser->tokenCount - 1];
+  return &parser->tokens[parser->current++];
 }
 
 bool parserEat(Parser *parser, TokenType type)
 {
-  if (parserPeek(parser).type == type)
+  if (parserPeek(parser)->type == type)
   {
     parserAdvance(parser);
     return true;
@@ -62,16 +109,16 @@ bool parserEat(Parser *parser, TokenType type)
   return false;
 }
 
-Token parserConsume(Parser *parser, TokenType type)
+Token *parserConsume(Parser *parser, TokenType type)
 {
-  if (parserPeek(parser).type == type)
+  if (parserPeek(parser)->type == type)
     return parserAdvance(parser);
   parserPanic(parser, "Expected a token but got something else");
 }
 
-bool isOp(Token token)
+bool isOp(TokenType type)
 {
-  switch (token.type)
+  switch (type)
   {
   case EQUIV:
   case NOT_EQUIV:
@@ -92,9 +139,9 @@ bool isOp(Token token)
   }
 }
 
-OpType processOp(Parser *parser, Token token)
+OpType processOp(Parser *parser, TokenType type)
 {
-  switch (token.type)
+  switch (type)
   {
   case EQUIV:
     return OP_EQUIV;
@@ -129,20 +176,30 @@ OpType processOp(Parser *parser, Token token)
 
 Node *simple(Parser *parser)
 {
-  Token token = parserAdvance(parser);
-  switch (token.type)
+  Token *token = parserAdvance(parser);
+  switch (token->type)
   {
   case NUMBER:
   {
     Primitive *num = malloc(sizeof(Primitive));
-    num->i = (int)token.value;
+    num->type = PRIMITIVE_FLOAT;
+    num->f = atof(token->value);
 
     Node *simple = newNode(PRIMITIVE);
     simple->primitive = num;
-    printf("%i\n", token.value);
+    return simple;
+  }
+  case VALUE:
+  {
+    Var *ref = malloc(sizeof(Var));
+    ref->name = token->value;
+
+    Node *simple = newNode(VAR);
+    simple->var = ref;
     return simple;
   }
   default:
+    printf("type: %s\n", tokenTypeToString(token->type));
     parserPanic(parser, "Not appropriate simple");
   }
 }
@@ -151,10 +208,36 @@ Node *call(Parser *parser)
 {
   Node *caller = simple(parser);
 
-  if (parserEat(parser, LEFT_PAREN) || parserEat(parser, LEFT_BRACK))
+  while (parserPeek(parser)->type == LEFT_PAREN || parserPeek(parser)->type == LEFT_BRACK)
   {
+    TokenType closing = parserAdvance(parser)->type == LEFT_PAREN ? RIGHT_PAREN : RIGHT_BRACK;
+    int argCapacity = GROW_CAPACITY(0);
     int argCount = 0;
-    // TODO
+    Node **args = NULL;
+    args = GROW_ARRAY(Node *, args, 0, argCapacity);
+    args[argCount++] = expr(parser);
+    while (parserEat(parser, COMMA))
+    {
+      Node *arg = expr(parser);
+      if (argCapacity < argCount + 1)
+      {
+        int oldCapacity = argCapacity;
+        argCapacity = GROW_CAPACITY(oldCapacity);
+        args = GROW_ARRAY(Node *, args, oldCapacity, argCapacity);
+      }
+      args[argCount++] = arg;
+    }
+    parserConsume(parser, closing);
+
+    Call *call = malloc(sizeof(Call));
+    call->argCount = argCount;
+    call->argCapacity = argCapacity;
+    call->args = args;
+    call->caller = caller;
+
+    Node *swap = newNode(CALL);
+    swap->call = call;
+    caller = swap;
   }
 
   return caller;
@@ -162,11 +245,11 @@ Node *call(Parser *parser)
 
 Node *unary(Parser *parser)
 {
-  if (isOp(parserPeek(parser)))
+  if (isOp(parserPeek(parser)->type))
   {
     UnaryOp *unaryOp = malloc(sizeof(UnaryOp));
-    unaryOp->op = processOp(parser, parserAdvance(parser));
-    unaryOp->right = *unary(parser);
+    unaryOp->op = processOp(parser, parserAdvance(parser)->type);
+    unaryOp->right = unary(parser);
 
     Node *unary = newNode(UNARY_OP);
     unary->unaryOp = unaryOp;
@@ -180,15 +263,15 @@ Node *expr(Parser *parser)
 {
   Node *left = unary(parser);
 
-  if (isOp(parserPeek(parser)))
+  if (isOp(parserPeek(parser)->type))
   {
-    OpType op = processOp(parser, parserAdvance(parser));
+    OpType op = processOp(parser, parserAdvance(parser)->type);
     Node *right = unary(parser);
 
     BinOp *binOp = malloc(sizeof(BinOp));
-    binOp->left = *left;
+    binOp->left = left;
     binOp->op = op;
-    binOp->right = *right;
+    binOp->right = right;
 
     Node *expr = newNode(BIN_OP);
     expr->binOp = binOp;
@@ -201,30 +284,40 @@ Node *expr(Parser *parser)
 Node *assignStmt(Parser *parser)
 {
   parserConsume(parser, KEYWORD_VAR);
-  char *name = parserConsume(parser, VALUE).value;
+  char *name = parserConsume(parser, VALUE)->value;
   parserConsume(parser, EQUAL);
   Node *value = expr(parser);
-  printf("%i", value->primitive->i);
-  printf("done");
-  exit(1);
-  parserConsume(parser, SEMICOLON);
+
+  Var *var = malloc(sizeof(Var));
+  var->name = name;
+  var->value = value;
+
+  Node *assign = newNode(VAR);
+  assign->type = VAR;
+  assign->var = var;
+  return assign;
 }
 
 Node *stmt(Parser *parser)
 {
-  switch (parserPeek(parser).type)
+  Node *stmt = NULL;
+  switch (parserPeek(parser)->type)
   {
   case KEYWORD_VAR:
-    return assignStmt(parser);
+    stmt = assignStmt(parser);
+    break;
   default:
+    stmt = expr(parser);
+    break;
   }
+  parserConsume(parser, SEMICOLON);
+  return stmt;
 }
 
 void parse(Parser *parser)
 {
-  while (parserPeek(parser).type != END_OF_FILE)
+  while (parserPeek(parser)->type != END_OF_FILE)
   {
     addNode(parser, stmt(parser));
-    break;
   }
 }

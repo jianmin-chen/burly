@@ -35,6 +35,12 @@ typedef enum NodeType
   CALL
 } NodeType;
 
+typedef enum PrimitiveType
+{
+  PRIMITIVE_FLOAT,
+  PRIMITIVE_STRING
+} PrimitiveType;
+
 struct Node
 {
   NodeType type;
@@ -51,9 +57,10 @@ struct Node
 
 struct Primitive
 {
+  PrimitiveType type;
+
   union
   {
-    int i;
     float f;
     char *s;
   };
@@ -61,28 +68,29 @@ struct Primitive
 
 struct Var
 {
-  Node value;
+  Node *value;
   char *name;
 };
 
 struct Call
 {
-  char *caller;
-  Node *args;
+  Node *caller;
+  Node **args;
+  int argCapacity; // Need to store to free later
   int argCount;
 };
 
 struct UnaryOp
 {
   OpType op;
-  Node right;
+  Node *right;
 };
 
 struct BinOp
 {
-  Node left;
+  Node *left;
   OpType op;
-  Node right;
+  Node *right;
 };
 
 typedef struct Parser
@@ -95,13 +103,21 @@ typedef struct Parser
   int tokenCount;
 } Parser;
 
+char *nodeToString(Node *node);
+
 void initParser(Parser *parser, Lexer *lexer);
 void parserPanic(Parser *parser, char *error);
 void parse(Parser *parser);
 
-Token parserPeek(Parser *parser);
-Token parserAdvance(Parser *parser);
+Token *parserPeek(Parser *parser);
+Token *parserAdvance(Parser *parser);
 bool parserEat(Parser *parser, TokenType type);
-Token parserConsume(Parser *parser, TokenType type);
+Token *parserConsume(Parser *parser, TokenType type);
+
+Node *simple(Parser *parser);
+Node *call(Parser *parser);
+Node *unary(Parser *parser);
+Node *expr(Parser *parser);
+Node *stmt(Parser *parser);
 
 #endif

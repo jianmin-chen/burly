@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include "language/lexer.h"
 #include "language/parser.h"
+#include "language/interpreter.h"
 
 static char *readFile(const char *path)
 {
@@ -66,9 +67,7 @@ int main(int argc, char *argv[])
         Token tok = lexer.tokens[i];
         fprintf(fptr, "{ \"type\": \"%s\", \"value\": \"%s\", \"row\": %i, \"col\": %i }", tokenTypeToString(tok.type), tok.value, tok.row, tok.col);
         if (i != lexer.tokenCount - 1)
-        {
           fprintf(fptr, ", ");
-        }
       }
       fprintf(fptr, " ]");
       fclose(fptr);
@@ -77,14 +76,31 @@ int main(int argc, char *argv[])
     Parser parser;
     initParser(&parser, &lexer);
     parse(&parser);
-    // printf("%s", tokenTypeToString(parserPeek(&parser).type));
 
     if (debug)
     {
+      FILE *fptr = fopen("parser.json", "w");
+      fprintf(fptr, "[ ");
       for (int i = 0; i < parser.nodeCount; i++)
       {
         Node node = parser.nodes[i];
-        printf("%i", node.primitive->i);
+        fprintf(fptr, "%s", nodeToString(&node));
+        if (i != parser.nodeCount - 1)
+          fprintf(fptr, ", ");
+      }
+      fprintf(fptr, " ]");
+      fclose(fptr);
+    }
+
+    Map *scope = defaultScope();
+    interpret(&parser, scope);
+
+    for (int i = 0; i < scope->capacity; i++)
+    {
+      MapEntry entry = scope->entries[i];
+      if (entry.key != NULL)
+      {
+        printf("%s: %s\n", entry.key, nodeToString(entry.value));
       }
     }
   }
