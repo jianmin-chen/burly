@@ -5,6 +5,8 @@
 
 typedef struct Primitive Primitive;
 typedef struct Var Var;
+typedef struct Fn Fn;
+typedef struct Return Return;
 typedef struct Call Call;
 typedef struct UnaryOp UnaryOp;
 typedef struct BinOp BinOp;
@@ -32,12 +34,15 @@ typedef enum NodeType
   UNARY_OP,
   BIN_OP,
   VAR,
+  FN,
+  RETURN,
   CALL
 } NodeType;
 
 typedef enum PrimitiveType
 {
-  PRIMITIVE_FLOAT,
+  PRIMITIVE_BOOLEAN,
+  PRIMITIVE_NUMBER,
   PRIMITIVE_STRING
 } PrimitiveType;
 
@@ -51,6 +56,8 @@ struct Node
     UnaryOp *unaryOp;
     BinOp *binOp;
     Var *var;
+    Fn *fn;
+    Return *ret;
     Call *call;
   };
 };
@@ -61,7 +68,8 @@ struct Primitive
 
   union
   {
-    float f;
+    bool b;
+    float n;
     char *s;
   };
 };
@@ -70,6 +78,24 @@ struct Var
 {
   Node *value;
   char *name;
+};
+
+struct Fn
+{
+  char *name;
+  Node **args;
+  Node **argTypes;
+  int argCapacity;
+  int argCount;
+  char *returnType;
+  Node **body;
+  int bodyCapacity;
+  int bodySize;
+};
+
+struct Return
+{
+  Node *value;
 };
 
 struct Call
@@ -106,6 +132,7 @@ typedef struct Parser
 char *nodeToString(Node *node);
 
 void initParser(Parser *parser, Lexer *lexer);
+void freeParser(Parser *parser);
 void parserPanic(Parser *parser, char *error);
 void parse(Parser *parser);
 
@@ -119,5 +146,7 @@ Node *call(Parser *parser);
 Node *unary(Parser *parser);
 Node *expr(Parser *parser);
 Node *stmt(Parser *parser);
+
+void freeNode(Node *n);
 
 #endif

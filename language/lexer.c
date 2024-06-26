@@ -17,6 +17,8 @@ char *tokenTypeToString(TokenType type)
     return "KEYWORD_VAR";
   case KEYWORD_FN:
     return "KEYWORD_FN";
+  case KEYWORD_RETURN:
+    return "KEYWORD_RETURN";
   case KEYWORD_CLASS:
     return "KEYWORD_CLASS";
   case KEYWORD_STATIC:
@@ -139,6 +141,10 @@ void lexerPanic(Lexer *lexer, char *error)
   }
 
   fprintf(stderr, "%i:%i | %s\n%*s\n", lexer->row, lexer->col, s, strlen(padded) + lexer->col + 5, padded);
+
+  free(padded);
+  free(s);
+
   exit(-1);
 }
 
@@ -308,6 +314,8 @@ void scanToken(Lexer *lexer)
         return addToken(lexer, KEYWORD_VAR, s);
       else if (strcmp(s, "fn") == 0)
         return addToken(lexer, KEYWORD_FN, s);
+      else if (strcmp(s, "return") == 0)
+        return addToken(lexer, KEYWORD_RETURN, s);
       else if (strcmp(s, "class") == 0)
         return addToken(lexer, KEYWORD_CLASS, s);
       else if (strcmp(s, "static") == 0)

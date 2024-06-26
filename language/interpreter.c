@@ -1,9 +1,10 @@
 #include "interpreter.h"
 #include <stdio.h>
 
-void output(Node *arg)
+#define RET_TYPE float
+
+void output(Node **args)
 {
-  printf("%s\n", nodeToString(arg));
 }
 
 Map *defaultScope()
@@ -21,10 +22,13 @@ void evaluate(Node *node, Map *scope)
   {
   case CALL:
   {
-    void *caller = getMap(scope, node->call->caller->var->name);
-    void (*f)(Node *arg);
-    f = caller;
-    f(node->call->args[0]);
+    // void *caller = getMap(scope, node->call->caller->var->name);
+    // void (*f)();
+    // f = caller;
+    // f();
+    // Fn *caller = getMap(scope, node->call->caller->var->name);
+    // float (*f)(float a, float b);
+    // f(caller->args[0]->primitive->n, caller->args[1]->primitive->n);
   }
   }
 }
@@ -36,6 +40,11 @@ void execute(Node *node, Map *scope)
   case VAR:
   {
     setMap(scope, node->var->name, node->var->value);
+    break;
+  }
+  case FN:
+  {
+    setMap(scope, node->fn->name, node->fn);
     break;
   }
   default:

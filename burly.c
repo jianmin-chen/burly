@@ -95,14 +95,15 @@ int main(int argc, char *argv[])
     Map *scope = defaultScope();
     interpret(&parser, scope);
 
-    for (int i = 0; i < scope->capacity; i++)
+    for (int i = 0; i < scope->length; i++)
     {
-      MapEntry entry = scope->entries[i];
-      if (entry.key != NULL)
-      {
-        printf("%s: %s\n", entry.key, nodeToString(entry.value));
-      }
+      char *key = scope->keys[i];
+      printf("%s: %s\n", key, nodeToString(getMap(scope, key)));
     }
+
+    free(scope);
+
+    free(program);
   }
   else
   {

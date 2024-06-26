@@ -12,6 +12,7 @@ typedef struct MapEntry
 typedef struct Map
 {
   MapEntry *entries;
+  char **keys;
   int capacity;
   int length;
 } Map;

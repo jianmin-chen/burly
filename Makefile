@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2
+CFLAGS = -Wno-error
 
 SRC = $(wildcard utils/*.c) $(wildcard language/*.c) burly.c
 TEST = $(wildcard utils/*.c) test.c

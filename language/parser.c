@@ -8,8 +8,8 @@ char *primitiveToString(Primitive *primitive)
 {
   switch (primitive->type)
   {
-  case PRIMITIVE_FLOAT:
-    return format("%f", primitive->f);
+  case PRIMITIVE_NUMBER:
+    return format("%f", primitive->n);
   case PRIMITIVE_STRING:
     return primitive->s;
   }
@@ -39,6 +39,11 @@ char *nodeToString(Node *node)
     char *s = "{ \"type\": \"VAR\"";
     return s;
   }
+  case FN:
+  {
+    char *s = "{ \"type\": \"FN\"";
+    return s;
+  }
   case CALL:
   {
     char *s = "{ \"type\": \"CALL\", ";
@@ -57,6 +62,14 @@ void initParser(Parser *parser, Lexer *lexer)
   parser->current = 0;
   parser->tokens = lexer->tokens;
   parser->tokenCount = lexer->tokenCount;
+}
+
+void freeParser(Parser *parser)
+{
+  for (int i = 0; i < parser->nodeCount; i++)
+  {
+    freeNode(&parser->nodes[i]);
+  }
 }
 
 void parserPanic(Parser *parser, char *error)
@@ -84,6 +97,8 @@ Node *newNode(NodeType type)
   node->type = type;
   return node;
 }
+
+void freeNode(Node *n) {}
 
 Token *parserPeek(Parser *parser)
 {
@@ -113,6 +128,7 @@ Token *parserConsume(Parser *parser, TokenType type)
 {
   if (parserPeek(parser)->type == type)
     return parserAdvance(parser);
+  printf("%s", tokenTypeToString(type));
   parserPanic(parser, "Expected a token but got something else");
 }
 
@@ -174,6 +190,19 @@ OpType processOp(Parser *parser, TokenType type)
   }
 }
 
+Node *id(Parser *parser, Token *token)
+{
+  if (token->type != VALUE)
+    parserPanic(parser, "Invalid syntax");
+
+  Var *ref = malloc(sizeof(Var));
+  ref->name = token->value;
+
+  Node *id = newNode(VAR);
+  id->var = ref;
+  return id;
+}
+
 Node *simple(Parser *parser)
 {
   Token *token = parserAdvance(parser);
@@ -182,22 +211,15 @@ Node *simple(Parser *parser)
   case NUMBER:
   {
     Primitive *num = malloc(sizeof(Primitive));
-    num->type = PRIMITIVE_FLOAT;
-    num->f = atof(token->value);
+    num->type = PRIMITIVE_NUMBER;
+    num->n = atof(token->value);
 
     Node *simple = newNode(PRIMITIVE);
     simple->primitive = num;
     return simple;
   }
   case VALUE:
-  {
-    Var *ref = malloc(sizeof(Var));
-    ref->name = token->value;
-
-    Node *simple = newNode(VAR);
-    simple->var = ref;
-    return simple;
-  }
+    return id(parser, token);
   default:
     printf("type: %s\n", tokenTypeToString(token->type));
     parserPanic(parser, "Not appropriate simple");
@@ -293,9 +315,88 @@ Node *assignStmt(Parser *parser)
   var->value = value;
 
   Node *assign = newNode(VAR);
-  assign->type = VAR;
   assign->var = var;
   return assign;
+}
+
+Node *fnStmt(Parser *parser)
+{
+  Fn *fn = malloc(sizeof(Fn));
+
+  parserConsume(parser, KEYWORD_FN);
+  fn->name = parserConsume(parser, VALUE)->value;
+
+  parserConsume(parser, LEFT_PAREN);
+  int argCapacity = GROW_CAPACITY(0);
+  int argCount = 0;
+  Node **args = NULL;
+  Node **argTypes = NULL;
+  args = GROW_ARRAY(Node *, args, 0, argCapacity);
+  argTypes = GROW_ARRAY(Node *, argTypes, 0, argCapacity);
+  while (!parserEat(parser, RIGHT_PAREN))
+  {
+    // Eat arguments, grab types
+    Node *arg = id(parser, parserAdvance(parser));
+    if (argCapacity < argCount + 1)
+    {
+      int oldCapacity = argCapacity;
+      argCapacity = GROW_CAPACITY(oldCapacity);
+      args = GROW_ARRAY(Node *, args, oldCapacity, argCapacity);
+      argTypes = GROW_ARRAY(Node *, args, oldCapacity, argCapacity);
+    }
+    args[argCount] = arg;
+
+    parserConsume(parser, COLON);
+    argTypes[argCount++] = id(parser, parserAdvance(parser));
+
+    if (parserPeek(parser)->type != RIGHT_PAREN)
+      parserConsume(parser, COMMA);
+  }
+  fn->argCapacity = argCapacity;
+  fn->argCount = argCount;
+  fn->args = args;
+
+  if (parserEat(parser, DASH))
+  {
+    // There is a provided return type, no need to deduce
+    parserConsume(parser, GT);
+    fn->returnType = id(parser, parserAdvance(parser));
+  }
+
+  parserConsume(parser, LEFT_BRACE);
+  int bodyCapacity = GROW_CAPACITY(0);
+  int bodySize = 0;
+  Node **body = NULL;
+  body = GROW_ARRAY(Node *, body, 0, bodyCapacity);
+  while (!parserEat(parser, RIGHT_BRACE))
+  {
+    // Eat up body, statement by statement
+    Node *line = stmt(parser);
+    if (bodyCapacity < bodySize + 1)
+    {
+      int oldCapacity = bodyCapacity;
+      bodyCapacity = GROW_CAPACITY(oldCapacity);
+      body = GROW_ARRAY(Node *, body, oldCapacity, bodyCapacity);
+    }
+    body[bodySize++] = line;
+  }
+  fn->bodyCapacity = bodyCapacity;
+  fn->bodySize = bodySize;
+  fn->body = body;
+
+  Node *func = newNode(FN);
+  func->fn = fn;
+  return func;
+}
+
+Node *returnStmt(Parser *parser)
+{
+  parserConsume(parser, KEYWORD_RETURN);
+  Return *ret = malloc(sizeof(Return));
+  ret->value = expr(parser);
+  Node *stmt = newNode(RETURN);
+  stmt->ret = ret;
+  return ret;
 }
 
 Node *stmt(Parser *parser)
@@ -305,6 +406,12 @@ Node *stmt(Parser *parser)
   {
   case KEYWORD_VAR:
     stmt = assignStmt(parser);
+    break;
+  case KEYWORD_FN:
+    stmt = fnStmt(parser);
+    break;
+  case KEYWORD_RETURN:
+    stmt = returnStmt(parser);
     break;
   default:
     stmt = expr(parser);

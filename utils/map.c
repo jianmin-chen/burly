@@ -33,9 +33,8 @@ const char *setMap(Map *map, const char *key, void *value)
     int oldCapacity = map->capacity;
     map->capacity = GROW_CAPACITY(oldCapacity);
     map->entries = GROW_ARRAY(void *, map->entries, oldCapacity, map->capacity);
+    map->keys = GROW_ARRAY(char *, map->keys, oldCapacity, map->capacity);
   }
-
-  map->length++;
 
   MapEntry entry;
   entry.key = key;
@@ -59,6 +58,7 @@ const char *setMap(Map *map, const char *key, void *value)
   // Didn't find key, insert it
   map->entries[index].key = (char *)key;
   map->entries[index].value = value;
+  map->keys[map->length++] = (char *)key;
   return key;
 }
 
